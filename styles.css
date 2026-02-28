@@ -1,0 +1,181 @@
+:root {
+  --bg-start: #071421;
+  --bg-end: #17324a;
+  --panel: rgba(8, 21, 33, 0.74);
+  --panel-stroke: rgba(255, 255, 255, 0.12);
+  --text: #e5f0f6;
+  --muted: #9cb8c8;
+  --accent: #f8a62a;
+  --accent-strong: #ff7b2e;
+  --danger: #f95738;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  font-family: "Space Grotesk", "Avenir Next", "Segoe UI", sans-serif;
+  color: var(--text);
+  background:
+    radial-gradient(circle at 18% 14%, rgba(248, 166, 42, 0.25), transparent 44%),
+    radial-gradient(circle at 88% 2%, rgba(249, 87, 56, 0.18), transparent 35%),
+    linear-gradient(165deg, var(--bg-start), var(--bg-end));
+}
+
+.app-shell {
+  width: min(1240px, 100%);
+  margin: 0 auto;
+  padding: 1.25rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.top-bar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.eyebrow {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+h1 {
+  margin: 0.18rem 0 0;
+  font-size: clamp(1.45rem, 3.5vw, 2.3rem);
+  line-height: 1.1;
+}
+
+.hint {
+  margin: 0;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.78rem;
+  color: #bbd4e2;
+}
+
+.control-panel {
+  background: var(--panel);
+  border: 1px solid var(--panel-stroke);
+  border-radius: 14px;
+  padding: 0.9rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.8rem;
+  backdrop-filter: blur(6px);
+}
+
+.control-panel label {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.83rem;
+  color: #c8dce8;
+}
+
+.control-panel input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent-strong);
+}
+
+.control-panel span {
+  font-family: "IBM Plex Mono", monospace;
+  color: #fff9ec;
+  font-size: 0.76rem;
+}
+
+.switch-row {
+  align-self: center;
+  display: flex !important;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.button-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+button {
+  border: 0;
+  border-radius: 10px;
+  padding: 0.65rem 0.72rem;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  color: #1f1204;
+  background: linear-gradient(180deg, #ffd27e, #f6a53d);
+  transition: transform 140ms ease, filter 140ms ease;
+}
+
+button:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.08);
+}
+
+button:active {
+  transform: translateY(1px);
+}
+
+#pause {
+  background: linear-gradient(180deg, #9bd2ef, #5ca6d2);
+}
+
+#send-train {
+  background: linear-gradient(180deg, #f6d884, #e8b445);
+}
+
+#rebuild-wall {
+  background: linear-gradient(180deg, #cde7d1, #87bc9a);
+}
+
+#clear {
+  background: linear-gradient(180deg, #f3bfb2, #df9079);
+}
+
+#reset {
+  background: linear-gradient(180deg, #d6dfef, #9ca8bc);
+}
+
+.viewport-wrap {
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid var(--panel-stroke);
+  background: rgba(10, 18, 24, 0.65);
+  box-shadow:
+    0 24px 44px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+#sim-canvas {
+  width: 100%;
+  height: min(66vh, 660px);
+  display: block;
+  touch-action: manipulation;
+}
+
+@media (max-width: 760px) {
+  .top-bar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .button-row {
+    grid-template-columns: 1fr;
+  }
+
+  #sim-canvas {
+    height: min(62vh, 520px);
+  }
+}

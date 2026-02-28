@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Impact Lab Physics Engine</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="top-bar">
+        <div>
+          <p class="eyebrow">Interactive Physics Sandbox</p>
+          <h1>Impact Lab</h1>
+        </div>
+        <p class="hint">Click/tap the canvas to trigger a shockwave.</p>
+      </header>
+
+      <section class="control-panel" aria-label="Simulation controls">
+        <label>
+          Launch speed
+          <input id="speed" type="range" min="5" max="220" step="1" value="55" />
+          <span id="speed-value"></span>
+        </label>
+
+        <label>
+          Launch angle
+          <input id="angle" type="range" min="5" max="85" step="1" value="32" />
+          <span id="angle-value"></span>
+        </label>
+
+        <label>
+          Cannon elevation
+          <input id="cannon-elevation" type="range" min="0.2" max="10" step="0.1" value="1.8" />
+          <span id="cannon-elevation-value"></span>
+        </label>
+
+        <label>
+          Wall distance
+          <input id="wall-distance" type="range" min="8" max="68" step="0.5" value="38" />
+          <span id="wall-distance-value"></span>
+        </label>
+
+        <label>
+          Wall height
+          <input id="wall-height" type="range" min="2" max="20" step="0.2" value="11" />
+          <span id="wall-height-value"></span>
+        </label>
+
+        <label>
+          Gravity
+          <input id="gravity" type="range" min="-30" max="60" step="0.1" value="9.81" />
+          <span id="gravity-value"></span>
+        </label>
+
+        <label>
+          Wind
+          <input id="wind" type="range" min="-25" max="25" step="0.1" value="0" />
+          <span id="wind-value"></span>
+        </label>
+
+        <label>
+          Fragment count
+          <input id="fragment-count" type="range" min="6" max="80" step="1" value="24" />
+          <span id="fragment-count-value"></span>
+        </label>
+
+        <label>
+          Explosion power
+          <input id="burst-power" type="range" min="6" max="140" step="1" value="52" />
+          <span id="burst-power-value"></span>
+        </label>
+
+        <label>
+          Bounciness
+          <input id="restitution" type="range" min="0.1" max="0.95" step="0.01" value="0.48" />
+          <span id="restitution-value"></span>
+        </label>
+
+        <label>
+          Time scale
+          <input id="time-scale" type="range" min="0.2" max="2.4" step="0.05" value="1" />
+          <span id="time-scale-value"></span>
+        </label>
+
+        <label>
+          Auto-fire interval
+          <input id="auto-fire-interval" type="range" min="0.25" max="3" step="0.05" value="0.9" />
+          <span id="auto-fire-interval-value"></span>
+        </label>
+
+        <label>
+          Train speed
+          <input id="train-speed" type="range" min="8" max="90" step="1" value="34" />
+          <span id="train-speed-value"></span>
+        </label>
+
+        <label class="switch-row">
+          <input id="show-trails" type="checkbox" checked />
+          Show trails
+        </label>
+
+        <label class="switch-row">
+          <input id="auto-fire" type="checkbox" />
+          Auto-fire
+        </label>
+
+        <div class="button-row">
+          <button id="launch" type="button">Launch</button>
+          <button id="send-train" type="button">Send train</button>
+          <button id="pause" type="button">Pause</button>
+          <button id="rebuild-wall" type="button">Rebuild wall</button>
+          <button id="clear" type="button">Clear debris</button>
+          <button id="reset" type="button">Reset</button>
+        </div>
+      </section>
+
+      <section class="viewport-wrap">
+        <canvas id="sim-canvas" aria-label="Physics simulation"></canvas>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
