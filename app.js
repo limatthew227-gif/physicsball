@@ -39,8 +39,14 @@ const controls = {
   autoFireIntervalValue: document.getElementById("auto-fire-interval-value"),
   trainSpeed: document.getElementById("train-speed"),
   trainSpeedValue: document.getElementById("train-speed-value"),
+  deflectorAngle: document.getElementById("deflector-angle"),
+  deflectorAngleValue: document.getElementById("deflector-angle-value"),
+  solverIterations: document.getElementById("solver-iterations"),
+  solverIterationsValue: document.getElementById("solver-iterations-value"),
   showTrails: document.getElementById("show-trails"),
   autoFire: document.getElementById("auto-fire"),
+  deflectorEnabled: document.getElementById("deflector-enabled"),
+  showContacts: document.getElementById("show-contacts"),
   launchButton: document.getElementById("launch"),
   sendTrainButton: document.getElementById("send-train"),
   pauseButton: document.getElementById("pause"),
@@ -63,6 +69,8 @@ const formatters = {
   timeScale: (v) => `${Number(v).toFixed(2)}x`,
   autoFireInterval: (v) => `${Number(v).toFixed(2)} s`,
   trainSpeed: (v) => `${Math.round(v)} m/s`,
+  deflectorAngle: (v) => `${Math.round(v)} deg`,
+  solverIterations: (v) => `${Math.round(v)}`,
 };
 
 const state = {
@@ -98,6 +106,7 @@ const state = {
   maxAltitudeM: 0,
   simTime: 0,
   fragmentPairHitTime: new Map(),
+  contactPoints: [],
   fps: 60,
   fpsSmoothing: 0.08,
 };
@@ -148,8 +157,12 @@ function getSettings() {
     timeScale: Number(controls.timeScale.value),
     autoFireInterval: Number(controls.autoFireInterval.value),
     trainSpeed: Number(controls.trainSpeed.value),
+    deflectorAngle: Number(controls.deflectorAngle.value),
+    solverIterations: Number(controls.solverIterations.value),
     showTrails: controls.showTrails.checked,
     autoFire: controls.autoFire.checked,
+    deflectorEnabled: controls.deflectorEnabled.checked,
+    showContacts: controls.showContacts.checked,
   };
 }
 
@@ -167,6 +180,8 @@ function updateReadouts() {
   controls.timeScaleValue.textContent = formatters.timeScale(controls.timeScale.value);
   controls.autoFireIntervalValue.textContent = formatters.autoFireInterval(controls.autoFireInterval.value);
   controls.trainSpeedValue.textContent = formatters.trainSpeed(controls.trainSpeed.value);
+  controls.deflectorAngleValue.textContent = formatters.deflectorAngle(controls.deflectorAngle.value);
+  controls.solverIterationsValue.textContent = formatters.solverIterations(controls.solverIterations.value);
 }
 
 function getLauncherOrigin(settings) {
@@ -193,6 +208,160 @@ function getWallRect(settings) {
     width: state.wall.widthM,
     height,
   };
+}
+
+function getDeflector(settings) {
+  const centerX = clamp(state.cannon.xM + settings.wallDistance * 0.56, 12, WORLD_WIDTH_M - 7);
+  const centerY = clamp(state.groundY - settings.wallHeight * 0.52, 2.8, state.groundY - 1.2);
+
+  return {
+    x: centerX,
+    y: centerY,
+    halfW: 2.35,
+    halfH: 0.24,
+    angleRad: (settings.deflectorAngle * Math.PI) / 180,
+  };
+}
+
+function getOrientedRectVertices(rect) {
+  const cos = Math.cos(rect.angleRad);
+  const sin = Math.sin(rect.angleRad);
+  const corners = [
+    { x: -rect.halfW, y: -rect.halfH },
+    { x: rect.halfW, y: -rect.halfH },
+    { x: rect.halfW, y: rect.halfH },
+    { x: -rect.halfW, y: rect.halfH },
+  ];
+
+  return corners.map((corner) => ({
+    x: rect.x + corner.x * cos - corner.y * sin,
+    y: rect.y + corner.x * sin + corner.y * cos,
+  }));
+}
+
+function normalizeVec(x, y) {
+  const len = Math.hypot(x, y);
+  if (len < 1e-8) {
+    return { x: 1, y: 0 };
+  }
+  return { x: x / len, y: y / len };
+}
+
+function projectPolygon(vertices, axisX, axisY) {
+  let min = Infinity;
+  let max = -Infinity;
+  for (const vertex of vertices) {
+    const projection = vertex.x * axisX + vertex.y * axisY;
+    min = Math.min(min, projection);
+    max = Math.max(max, projection);
+  }
+  return { min, max };
+}
+
+function projectCircle(cx, cy, radius, axisX, axisY) {
+  const centerProj = cx * axisX + cy * axisY;
+  return { min: centerProj - radius, max: centerProj + radius };
+}
+
+function getIntervalOverlap(a, b) {
+  return Math.min(a.max, b.max) - Math.max(a.min, b.min);
+}
+
+function satCirclePolygon(circleX, circleY, radius, vertices, polygonCenterX, polygonCenterY) {
+  const axes = [];
+
+  for (let i = 0; i < vertices.length; i += 1) {
+    const current = vertices[i];
+    const next = vertices[(i + 1) % vertices.length];
+    const edgeX = next.x - current.x;
+    const edgeY = next.y - current.y;
+    const normal = normalizeVec(-edgeY, edgeX);
+    axes.push(normal);
+  }
+
+  let closest = vertices[0];
+  let closestDistSq = Infinity;
+  for (const vertex of vertices) {
+    const dx = circleX - vertex.x;
+    const dy = circleY - vertex.y;
+    const distSq = dx * dx + dy * dy;
+    if (distSq < closestDistSq) {
+      closestDistSq = distSq;
+      closest = vertex;
+    }
+  }
+
+  const circleAxis = normalizeVec(circleX - closest.x, circleY - closest.y);
+  axes.push(circleAxis);
+
+  let minOverlap = Infinity;
+  let bestAxis = { x: 1, y: 0 };
+
+  for (const axis of axes) {
+    const polyProjection = projectPolygon(vertices, axis.x, axis.y);
+    const circleProjection = projectCircle(circleX, circleY, radius, axis.x, axis.y);
+    const overlap = getIntervalOverlap(polyProjection, circleProjection);
+    if (overlap <= 0) {
+      return null;
+    }
+    if (overlap < minOverlap) {
+      minOverlap = overlap;
+      bestAxis = axis;
+    }
+  }
+
+  const directionToCircleX = circleX - polygonCenterX;
+  const directionToCircleY = circleY - polygonCenterY;
+  if (directionToCircleX * bestAxis.x + directionToCircleY * bestAxis.y < 0) {
+    bestAxis = { x: -bestAxis.x, y: -bestAxis.y };
+  }
+
+  return {
+    normalX: bestAxis.x,
+    normalY: bestAxis.y,
+    penetration: minOverlap,
+    contactX: circleX - bestAxis.x * radius,
+    contactY: circleY - bestAxis.y * radius,
+  };
+}
+
+function recordContact(x, y, normalX, normalY, color = "132,224,255") {
+  if (state.contactPoints.length >= 180) {
+    return;
+  }
+  state.contactPoints.push({
+    x,
+    y,
+    normalX,
+    normalY,
+    color,
+  });
+}
+
+function resolveCircleDeflectorCollision(body, deflector) {
+  const vertices = getOrientedRectVertices(deflector);
+  const satResult = satCirclePolygon(body.x, body.y, body.r, vertices, deflector.x, deflector.y);
+  if (!satResult) {
+    return;
+  }
+
+  body.x += satResult.normalX * satResult.penetration;
+  body.y += satResult.normalY * satResult.penetration;
+  recordContact(satResult.contactX, satResult.contactY, satResult.normalX, satResult.normalY, "120,255,233");
+
+  const restitution = 0.46;
+  const friction = 0.24;
+  const normalVelocity = body.vx * satResult.normalX + body.vy * satResult.normalY;
+  if (normalVelocity < 0) {
+    body.vx -= (1 + restitution) * normalVelocity * satResult.normalX;
+    body.vy -= (1 + restitution) * normalVelocity * satResult.normalY;
+
+    const tx = -satResult.normalY;
+    const ty = satResult.normalX;
+    const tangentVelocity = body.vx * tx + body.vy * ty;
+    body.vx -= tangentVelocity * friction * tx;
+    body.vy -= tangentVelocity * friction * ty;
+  }
 }
 
 function rectsOverlap(a, b) {
@@ -456,6 +625,7 @@ function resolveRectCollision(body, rect, restitution, friction) {
 
   body.x += nx * penetration;
   body.y += ny * penetration;
+  recordContact(nearestX, nearestY, nx, ny, "255,198,130");
 
   const normalVelocity = body.vx * nx + body.vy * ny;
   if (normalVelocity < 0) {
@@ -517,6 +687,7 @@ function resolveBodyTrainCollision(body, train) {
 
   body.x += nx * penetration;
   body.y += ny * penetration;
+  recordContact(nearestX, nearestY, nx, ny, "255,233,148");
 
   const relativeNormalVelocity = (body.vx - train.vx) * nx + body.vy * ny;
   if (relativeNormalVelocity < 0) {
@@ -619,9 +790,9 @@ function pruneFragmentPairCache(removedBodyIds) {
   }
 }
 
-function resolveBodyCollisions(removeBodyIds) {
+function resolveBodyCollisions(removeBodyIds, settings) {
   const bodies = state.bodies;
-  const iterations = 6;
+  const iterations = settings.solverIterations;
   const slop = 0.001;
   const correctionPercent = 0.82;
 
@@ -671,6 +842,9 @@ function resolveBodyCollisions(removeBodyIds) {
         a.y -= ny * correction * invMassA;
         b.x += nx * correction * invMassB;
         b.y += ny * correction * invMassB;
+        const contactX = a.x + nx * a.r;
+        const contactY = a.y + ny * a.r;
+        recordContact(contactX, contactY, nx, ny, "149,228,255");
 
         const rvx = b.vx - a.vx;
         const rvy = b.vy - a.vy;
@@ -777,7 +951,9 @@ function updateEffects(dt) {
 
 function stepPhysics(dt, settings) {
   state.simTime += dt;
+  state.contactPoints.length = 0;
   const wall = getWallRect(settings);
+  const deflector = settings.deflectorEnabled ? getDeflector(settings) : null;
   const removeBodyIds = new Set();
 
   if (state.train) {
@@ -866,13 +1042,22 @@ function stepPhysics(dt, settings) {
     }
   }
 
+  if (deflector) {
+    for (const body of state.bodies) {
+      if (removeBodyIds.has(body.id)) {
+        continue;
+      }
+      resolveCircleDeflectorCollision(body, deflector);
+    }
+  }
+
   if (removeBodyIds.size > 0) {
     state.bodies = state.bodies.filter((body) => !removeBodyIds.has(body.id));
     pruneFragmentPairCache(removeBodyIds);
     removeBodyIds.clear();
   }
 
-  resolveBodyCollisions(removeBodyIds);
+  resolveBodyCollisions(removeBodyIds, settings);
   if (removeBodyIds.size > 0) {
     state.bodies = state.bodies.filter((body) => !removeBodyIds.has(body.id));
     pruneFragmentPairCache(removeBodyIds);
@@ -966,6 +1151,37 @@ function drawWall(settings) {
   ctx.strokeStyle = "rgba(255, 220, 180, 0.38)";
   ctx.lineWidth = 2;
   ctx.strokeRect(leftPx + 0.5, topPx + 0.5, widthPx - 1, heightPx - 1);
+}
+
+function drawDeflector(settings) {
+  if (!settings.deflectorEnabled) {
+    return;
+  }
+
+  const deflector = getDeflector(settings);
+  const vertices = getOrientedRectVertices(deflector);
+
+  ctx.beginPath();
+  ctx.moveTo(mx(vertices[0].x), my(vertices[0].y));
+  for (let i = 1; i < vertices.length; i += 1) {
+    ctx.lineTo(mx(vertices[i].x), my(vertices[i].y));
+  }
+  ctx.closePath();
+
+  const gradient = ctx.createLinearGradient(
+    mx(vertices[0].x),
+    my(vertices[0].y),
+    mx(vertices[2].x),
+    my(vertices[2].y),
+  );
+  gradient.addColorStop(0, "#3f7ea8");
+  gradient.addColorStop(1, "#4fb4c9");
+  ctx.fillStyle = gradient;
+  ctx.fill();
+
+  ctx.strokeStyle = "rgba(223, 252, 255, 0.95)";
+  ctx.lineWidth = 2;
+  ctx.stroke();
 }
 
 function drawLauncher(settings) {
@@ -1135,6 +1351,28 @@ function drawEffects() {
   }
 }
 
+function drawContacts(settings) {
+  if (!settings.showContacts) {
+    return;
+  }
+
+  for (const contact of state.contactPoints) {
+    const cx = mx(contact.x);
+    const cy = my(contact.y);
+    ctx.fillStyle = `rgba(${contact.color}, 0.95)`;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 2.7, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = `rgba(${contact.color}, 0.82)`;
+    ctx.lineWidth = 1.3;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + contact.normalX * 16, cy + contact.normalY * 16);
+    ctx.stroke();
+  }
+}
+
 function drawHud(settings) {
   ctx.font = '600 12px "IBM Plex Mono", monospace';
   ctx.fillStyle = "rgba(228, 242, 252, 0.92)";
@@ -1144,15 +1382,19 @@ function drawHud(settings) {
   const bricks = state.bodies.filter((body) => body.kind === "brick").length;
   const wallStatus = state.wallBroken ? "Demolished" : "Intact";
   const trainStatus = state.train ? `Active @ ${state.train.vx.toFixed(1)} m/s` : "Idle";
+  const deflectorStatus = settings.deflectorEnabled ? `${settings.deflectorAngle.toFixed(0)} deg` : "Off";
   const lines = [
     `Units: meters / seconds`,
     `Shots: ${state.shotsFired}`,
+    `Live projectiles: ${activeProjectiles}`,
     `Spawned fragments: ${state.fragmentsSpawned}`,
     `Live fragments: ${Math.max(0, fragments)}   Bricks: ${bricks}`,
     `Wall: ${settings.wallDistance.toFixed(1)} m away, ${settings.wallHeight.toFixed(1)} m tall`,
     `Wall status: ${wallStatus}   Walls demolished: ${state.wallsDemolished}`,
     `Cannon elevation: ${settings.cannonElevation.toFixed(1)} m`,
     `Train: ${trainStatus}   Trains sent: ${state.trainsSent}`,
+    `Deflector: ${deflectorStatus}   Solver iterations: ${settings.solverIterations}`,
+    `Contacts visible: ${settings.showContacts ? "On" : "Off"} (${state.contactPoints.length})`,
     `Sky obliterations: ${state.skyObliterations}`,
     `Peak altitude: ${state.maxAltitudeM.toFixed(1)} m`,
     `FPS: ${state.fps.toFixed(0)}  Time scale: ${settings.timeScale.toFixed(2)}x`,
@@ -1169,11 +1411,13 @@ function render(settings) {
   drawBackground();
   drawGround();
   drawWall(settings);
+  drawDeflector(settings);
   drawTrain();
   drawLauncher(settings);
   drawTrails(settings.showTrails);
   drawBodies();
   drawEffects();
+  drawContacts(settings);
   drawHud(settings);
 }
 
@@ -1218,6 +1462,7 @@ function resetSimulation() {
   state.maxAltitudeM = 0;
   state.simTime = 0;
   state.fragmentPairHitTime.clear();
+  state.contactPoints.length = 0;
   state.autoFireClock = 0;
   state.accumulator = 0;
 }
@@ -1290,6 +1535,8 @@ const rangeInputs = [
   controls.timeScale,
   controls.autoFireInterval,
   controls.trainSpeed,
+  controls.deflectorAngle,
+  controls.solverIterations,
 ];
 
 for (const input of rangeInputs) {

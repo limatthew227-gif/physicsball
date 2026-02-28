@@ -101,6 +101,18 @@
           <span id="train-speed-value"></span>
         </label>
 
+        <label>
+          Deflector angle
+          <input id="deflector-angle" type="range" min="-80" max="80" step="1" value="18" />
+          <span id="deflector-angle-value"></span>
+        </label>
+
+        <label>
+          Solver iterations
+          <input id="solver-iterations" type="range" min="2" max="14" step="1" value="7" />
+          <span id="solver-iterations-value"></span>
+        </label>
+
         <label class="switch-row">
           <input id="show-trails" type="checkbox" checked />
           Show trails
@@ -109,6 +121,16 @@
         <label class="switch-row">
           <input id="auto-fire" type="checkbox" />
           Auto-fire
+        </label>
+
+        <label class="switch-row">
+          <input id="deflector-enabled" type="checkbox" checked />
+          Enable deflector
+        </label>
+
+        <label class="switch-row">
+          <input id="show-contacts" type="checkbox" />
+          Show contacts
         </label>
 
         <div class="button-row">
