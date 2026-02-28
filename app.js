@@ -514,7 +514,11 @@ function addShockwaveEffect(x, y, color, life = 0.35, maxRadius = 7.5) {
   });
 }
 
-function applyRadialImpulse(originX, originY, radius, strength, skipBodyId = null) {
+function applyRadialImpulse(originX, originY, radius, strength, skipBodyId = null, options = {}) {
+  const projectileMultiplier = options.projectileMultiplier ?? 1;
+  const fragmentMultiplier = options.fragmentMultiplier ?? 1;
+  const brickMultiplier = options.brickMultiplier ?? 1;
+
   for (const body of state.bodies) {
     if (skipBodyId !== null && body.id === skipBodyId) {
       continue;
@@ -530,10 +534,51 @@ function applyRadialImpulse(originX, originY, radius, strength, skipBodyId = nul
     const nx = dx / distance;
     const ny = dy / distance;
     const falloff = 1 - distance / radius;
-    const kick = strength * falloff * clamp(1 / Math.sqrt(body.mass), 0.18, 1.2);
+    const massScale = clamp(1 / Math.sqrt(body.mass), 0.18, 1.2);
+    let kindMultiplier = 1;
+    if (body.kind === "projectile") {
+      kindMultiplier = projectileMultiplier;
+    } else if (body.kind === "fragment") {
+      kindMultiplier = fragmentMultiplier;
+    } else if (body.kind === "brick") {
+      kindMultiplier = brickMultiplier;
+    }
+
+    const kick = strength * falloff * massScale * kindMultiplier;
 
     body.vx += nx * kick;
     body.vy += ny * kick;
+  }
+
+  if (options.includeTrain && state.train) {
+    const trainRect = getTrainRect(state.train);
+    if (!trainRect) {
+      return;
+    }
+
+    const dx = state.train.x - originX;
+    const dy = state.train.y - originY;
+    const radiusScale = options.trainRadiusScale ?? 1.6;
+    const trainRadius = radius * radiusScale;
+    const distance = Math.hypot(dx, dy);
+    if (distance > trainRadius) {
+      return;
+    }
+
+    const falloff = 1 - distance / trainRadius;
+    let dirX = dx;
+    if (Math.abs(dirX) < 0.05) {
+      dirX = originX <= state.train.x ? 1 : -1;
+    }
+    dirX = Math.sign(dirX);
+
+    const trainMultiplier = options.trainMultiplier ?? 1;
+    const impulseX = dirX * strength * falloff * trainMultiplier;
+    state.train.vx = clamp(state.train.vx + impulseX, -140, 140);
+
+    const contactX = clamp(originX, trainRect.left, trainRect.right);
+    const contactY = clamp(originY, trainRect.top, trainRect.bottom);
+    recordContact(contactX, contactY, dirX, 0, "255,233,148");
   }
 }
 
@@ -1477,8 +1522,15 @@ function triggerPointerShockwave(event) {
   const x = mp(event.clientX - rect.left);
   const y = mp(event.clientY - rect.top);
 
-  applyRadialImpulse(x, y, 6.2, 26);
-  addShockwaveEffect(x, y, "132,224,255", 0.33, 7.2);
+  applyRadialImpulse(x, y, 8.1, 52, null, {
+    includeTrain: true,
+    projectileMultiplier: 2.5,
+    fragmentMultiplier: 1.2,
+    brickMultiplier: 1.35,
+    trainMultiplier: 1.4,
+    trainRadiusScale: 1.9,
+  });
+  addShockwaveEffect(x, y, "132,224,255", 0.36, 8.6);
 }
 
 function tick(timestamp) {
